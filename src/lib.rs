@@ -45,6 +45,7 @@
 )]
 
 use core::fmt::{self, Display};
+use core::marker::PhantomData;
 
 mod binary;
 mod common;
@@ -85,11 +86,7 @@ pub trait FastFloat: float::Float {
     /// or if any characters are left remaining unparsed.
     #[inline]
     fn parse_float<S: AsRef<[u8]>>(s: S) -> Result<Self> {
-        let s = s.as_ref();
-        match Self::parse_float_partial(s) {
-            Ok((v, n)) if n == s.len() => Ok(v),
-            _ => Err(Error),
-        }
+    Self::_parse_float(s,b'.')
     }
 
     /// Parse a decimal number from string into float (partial).
@@ -102,14 +99,82 @@ pub trait FastFloat: float::Float {
     /// Will return an error either if the string doesn't start with a valid decimal number
     /// – that is, if no zero digits were processed.
     #[inline]
-    fn parse_float_partial<S: AsRef<[u8]>>(s: S) -> Result<(Self, usize)> {
-        parse::parse_float(s.as_ref()).ok_or(Error)
+    fn parse_float_partial<S: AsRef<[u8]>>(s: S) -> Result<(Self, usize)> { Self::_parse_float_partial(s,b'.')
+    }
+    /// Parse a decimal number from string into float (full). Comma(",") is treated as decimal point instead of dot(".").
+    ///
+    /// # Errors
+    ///
+    /// Will return an error either if the string is not a valid decimal number.
+    /// or if any characters are left remaining unparsed.
+    #[inline]
+    fn parse_float_comma<S: AsRef<[u8]>>(s: S) -> Result<Self> {
+        Self::_parse_float(s,b',')
+    }
+
+    /// Parse a decimal number from string into float (partial). Comma(",") is treated as decimal point instead of dot(".").
+    ///
+    /// This method parses as many characters as possible and returns the resulting number along
+    /// with the number of digits processed (in case of success, this number is always positive).
+    ///
+    /// # Errors
+    ///
+    /// Will return an error either if the string doesn't start with a valid decimal number
+    /// – that is, if no zero digits were processed.
+    #[inline]
+    fn parse_float_partial_comma<S: AsRef<[u8]>>(s: S) -> Result<(Self, usize)> {
+        Self::_parse_float_partial(s,b',')
+    }
+    #[inline]
+    fn _parse_float<S: AsRef<[u8]>>(s: S,decimal_point: u8) -> Result<Self> {
+        let s = s.as_ref();
+        match Self::_parse_float_partial(s,decimal_point) {
+            Ok((v, n)) if n == s.len() => Ok(v),
+            _ => Err(Error),
+        }
+    }
+    #[inline]
+    fn _parse_float_partial<S: AsRef<[u8]>>(s: S,decimal_point: u8) -> Result<(Self, usize)> {
+        parse::parse_float(s.as_ref(), decimal_point).ok_or(Error)
     }
 }
 
 impl FastFloat for f32 {}
 impl FastFloat for f64 {}
+pub struct FastFloatParser<T: FastFloat> {
+    pub decimal_point: u8,
+    phantom: PhantomData<T>,
+}
+impl<T: FastFloat> FastFloatParser<T> {
+    pub fn new(decimal_point:u8)->Self
+    {
+        Self{ decimal_point, phantom: PhantomData }
+    }
+    /// Parse a decimal number from string into float (full).
+    ///
+    /// # Errors
+    ///
+    /// Will return an error either if the string is not a valid decimal number
+    /// or if any characters are left remaining unparsed.
+    #[inline]
+    pub fn parse<S: AsRef<[u8]>>(&self,s: S) -> Result<T> {
+        T::_parse_float(s,self.decimal_point)
+    }
 
+    /// Parse a decimal number from string into float (partial).
+    ///
+    /// This function parses as many characters as possible and returns the resulting number along
+    /// with the number of digits processed (in case of success, this number is always positive).
+    ///
+    /// # Errors
+    ///
+    /// Will return an error either if the string doesn't start with a valid decimal number
+    /// – that is, if no zero digits were processed.
+    #[inline]
+    pub fn parse_partial<S: AsRef<[u8]>>(&self,s: S) -> Result<(T, usize)> {
+        T::_parse_float_partial(s,self.decimal_point)
+    }
+}
 /// Parse a decimal number from string into float (full).
 ///
 /// # Errors
@@ -133,4 +198,29 @@ pub fn parse<T: FastFloat, S: AsRef<[u8]>>(s: S) -> Result<T> {
 #[inline]
 pub fn parse_partial<T: FastFloat, S: AsRef<[u8]>>(s: S) -> Result<(T, usize)> {
     T::parse_float_partial(s)
+}
+
+/// Parse a decimal number from string into float (full). Comma(",") is treated as decimal point instead of dot(".").
+///
+/// # Errors
+///
+/// Will return an error either if the string is not a valid decimal number
+/// or if any characters are left remaining unparsed.
+#[inline]
+pub fn parse_comma<T: FastFloat, S: AsRef<[u8]>>(s: S) -> Result<T> {
+    T::parse_float_comma(s)
+}
+
+/// Parse a decimal number from string into float (partial). Comma(",") is treated as decimal point instead of dot(".").
+///
+/// This function parses as many characters as possible and returns the resulting number along
+/// with the number of digits processed (in case of success, this number is always positive).
+///
+/// # Errors
+///
+/// Will return an error either if the string doesn't start with a valid decimal number
+/// – that is, if no zero digits were processed.
+#[inline]
+pub fn parse_partial_comma<T: FastFloat, S: AsRef<[u8]>>(s: S) -> Result<(T, usize)> {
+    T::parse_float_partial_comma(s)
 }

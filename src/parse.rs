@@ -4,12 +4,12 @@ use crate::number::{parse_inf_nan, parse_number};
 use crate::simple::parse_long_mantissa;
 
 #[inline]
-pub fn parse_float<F: Float>(s: &[u8]) -> Option<(F, usize)> {
+pub fn parse_float<F: Float>(s: &[u8], decimal_point:u8) -> Option<(F, usize)> {
     if s.is_empty() {
         return None;
     }
 
-    let (num, rest) = match parse_number(s) {
+    let (num, rest) = match parse_number(s,decimal_point) {
         Some(r) => r,
         None => return parse_inf_nan(s),
     };
